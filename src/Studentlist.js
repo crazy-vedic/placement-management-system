@@ -15,7 +15,7 @@ function StudentList() {
 
 
   useEffect(() => {
-    axios.get('http://localhost/getdata.php')
+    axios.get('http://localhost/placementManagement/getdata.php')
       .then(response => {
         const studentsWithSkillsArray = response.data.map(student => ({
           ...student,
@@ -45,7 +45,7 @@ function StudentList() {
     if (e.key === 'Enter') {
       e.preventDefault(); // Prevent the default action to avoid any form submission, if applicable
       let tempData = { ...tempEditValues };delete tempData.skills; // Remove the 'skills' property from the data to be sent
-      axios.post('http://localhost/updateStudent.php', { ...tempData, id: studentId })
+      axios.post('http://localhost/placementManagement/updateStudent.php', { ...tempData, id: studentId })
         .then(response => {
           if (response.status === 200) {
             // Update was successful, update the students state
@@ -73,7 +73,7 @@ function StudentList() {
     }
     setHidden(false);
 
-    axios.get(`http://localhost/placementdata.php`, { params: { id: placementId } }) // Update the URL to your actual endpoint
+    axios.get(`http://localhost/placementManagement/placementdata.php`, { params: { id: placementId } }) // Update the URL to your actual endpoint
       .then(response => {
         setPlacementData(response.data);
         setAllPlacementData(prevData => ({ ...prevData, [placementId]: response.data }))
@@ -136,7 +136,7 @@ function StudentList() {
     setSortedStudents(sorted);
   }, [students, sortConfig]);
   const removeSkill = (studentId, skill) => {
-    axios.post('http://localhost/removeSkill.php', {
+    axios.post('http://localhost/placementManagement/removeSkill.php', {
       studentId: studentId,
       skill: skill.toString().trim()
     })
@@ -159,7 +159,7 @@ function StudentList() {
   };
 
   const addSkill = (studentId, skill) => {
-    axios.post('http://localhost/addSkill.php', {
+    axios.post('http://localhost/placementManagement/addSkill.php', {
       studentId: studentId,
       skill: skill.toString().trim()
     })
@@ -259,7 +259,8 @@ function StudentList() {
                             style={{ padding: '0', width: '20px', height: '20px', fontSize: '0.8em', border: 'None' ,cursor: 'pointer' }}            >
                             ❌
                           </button>
-                          {skill.toString().trim()},
+                          {skill.toString().trim()}
+                          {index < tempEditValues.skills.length - 1 && ','}
                         </span>
                       </div>
                     ))}
