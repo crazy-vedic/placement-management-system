@@ -11,19 +11,27 @@ function StudentList() {
   const [tempEditValues, setTempEditValues] = useState({});
   const [AllPlacementData, setAllPlacementData] = useState({});
   const [sortConfig, setSortConfig] = useState({});
+  const [sortedStudents, setSortedStudents] = useState([...students]);
+
 
   useEffect(() => {
     axios.get('http://localhost/getdata.php')
       .then(response => {
-        setStudents(response.data);
+        const studentsWithSkillsArray = response.data.map(student => ({
+          ...student,
+          skills: student.skills.split(',')
+        }));
+        setStudents(studentsWithSkillsArray);
+        console.log(studentsWithSkillsArray)
       })
       .catch(error => {
         console.error('There was an error fetching the students data:', error);
       });
   }, []);
 
+
   const editStudent = (id) => {
-    if (id === editingId) {setEditingId(null); return;}
+    if (id === editingId) { setEditingId(null); return; }
     setEditingId(id);
     const student = students.find(student => student.id === id);
     setTempEditValues(student); // Initialize temporary edit values with the student's current data
@@ -33,17 +41,17 @@ function StudentList() {
     setTempEditValues({ ...tempEditValues, [field]: e.target.value });
   };
 
-  const handleKeyPress = (e, studentId) => {
+  const handleKeyPress = (e, studentId,extra=null) => {
     if (e.key === 'Enter') {
       e.preventDefault(); // Prevent the default action to avoid any form submission, if applicable
-
-      axios.post('http://localhost/updateStudent.php', { ...tempEditValues, id: studentId })
+      let tempData = { ...tempEditValues };delete tempData.skills; // Remove the 'skills' property from the data to be sent
+      axios.post('http://localhost/updateStudent.php', { ...tempData, id: studentId })
         .then(response => {
           if (response.status === 200) {
             // Update was successful, update the students state
             setStudents(students.map(student => {
               if (student.id === studentId) {
-                return { ...student, ...tempEditValues };
+                return { ...student, ...tempEditValues ,skills:extra?[student.skills,extra]:student.skills};
               }
               return student;
             }));
@@ -55,21 +63,8 @@ function StudentList() {
           // Optionally handle error, e.g., show an error message
         });
     }
-    else if (e.key === 'Escape') {
-      setEditingId(null); // Exit editing mode
-    }
   };
-
-  useEffect(() => {
-    axios.get('http://localhost/getdata.php')
-      .then(response => {
-        console.log(response.data)        
-        setStudents(response.data); 
-      })
-      .catch(error => {
-        console.error('There was an error fetching the students data:', error);
-      });
-  }, []);
+  window.addEventListener('keydown', (e) => { if (e.key === 'Escape') { setEditingId(null); } });
 
   const fetchPlacementData = (placementId) => {
     if (placementId === 0) {
@@ -81,7 +76,7 @@ function StudentList() {
     axios.get(`http://localhost/placementdata.php`, { params: { id: placementId } }) // Update the URL to your actual endpoint
       .then(response => {
         setPlacementData(response.data);
-        setAllPlacementData(prevData => ({...prevData, [placementId]: response.data}))
+        setAllPlacementData(prevData => ({ ...prevData, [placementId]: response.data }))
         console.log(AllPlacementData)
       })
       .catch(error => {
@@ -107,124 +102,211 @@ function StudentList() {
         return { ...prevConfig, [key]: 'none' };
       });
     }
-  };  const getSortDirectionIndicator = key => {
+  }; const getSortDirectionIndicator = key => {
     return sortConfig[key] === 'ascending' ? '↑' : sortConfig[key] === 'descending' ? '↓' : '';
   };
-  let sortedStudents = [...students];
-  Object.keys(sortConfig).forEach(key => {
-    if (sortConfig[key] !== 'none') {
-      sortedStudents.sort((a, b) => {
-        if (key === 'skills') {
-          // Special case for 'skills'
-          const aSkills = a[key].split(',');
-          const bSkills = b[key].split(',');
-          if (aSkills.length < bSkills.length) {
-            return sortConfig[key] === 'ascending' ? -1 : 1;
+  useEffect(() => {
+    let sorted = [...students];
+    Object.keys(sortConfig).forEach(key => {
+      if (sortConfig[key] !== 'none') {
+        sorted.sort((a, b) => {
+          if (key === 'skills') {
+            // Special case for 'skills'
+            const aSkills = a[key];
+            const bSkills = b[key];
+            if (aSkills.length < bSkills.length) {
+              return sortConfig[key] === 'ascending' ? -1 : 1;
+            }
+            if (aSkills.length > bSkills.length) {
+              return sortConfig[key] === 'ascending' ? 1 : -1;
+            }
+          } else {
+            // Default case
+            if (a[key] > b[key]) {
+              return sortConfig[key] === 'ascending' ? -1 : 1;
+            }
+            if (a[key] < b[key]) {
+              return sortConfig[key] === 'ascending' ? 1 : -1;
+            }
           }
-          if (aSkills.length > bSkills.length) {
-            return sortConfig[key] === 'ascending' ? 1 : -1;
-          }
+          return 0;
+        });
+      }
+    });
+    setSortedStudents(sorted);
+  }, [students, sortConfig]);
+  const removeSkill = (studentId, skill) => {
+    axios.post('http://localhost/removeSkill.php', {
+      studentId: studentId,
+      skill: skill.toString().trim()
+    })
+      .then(response => {
+        if (response.status === 200) {
+          setStudents(students.map(student => {
+            if (student.id === studentId) {
+              return { ...student, skills: student.skills.filter(s => s !== skill) };
+            }
+            return student;
+          }));
+          setEditingId(null);
         } else {
-          // Default case
-          if (a[key] > b[key]) {
-            return sortConfig[key] === 'ascending' ? -1 : 1;
-          }
-          if (a[key] < b[key]) {
-            return sortConfig[key] === 'ascending' ? 1 : -1;
-          }
+          console.error('Failed to remove skill:', response.data);
         }
-        return 0;
+      })
+      .catch(error => {
+        console.error('There was an error removing the skill:', error);
       });
-    }
-  });    
-  return (
+  };
+
+  const addSkill = (studentId, skill) => {
+    axios.post('http://localhost/addSkill.php', {
+      studentId: studentId,
+      skill: skill.toString().trim()
+    })
+    .then(response => {
+      if (response.status === 200) {
+        // setStudents(students.map(student => {
+        //   if (student.id === studentId) {
+        //     return { ...student, skills: [...student.skills, skill] };
+        //   }
+        //   return student;
+        // console.log(skill)
+        setEditingId(null);
+        return skill;
+      } else {
+        console.error('Failed to add skill:', response.data);
+        return null
+      }
+    })
+    .catch(error => {
+      console.error('There was an error adding the skill:', error);
+      return null
+    });
+  };
+   return (
     <div className="student-container">
       <h2>Placement Management System</h2>
       <table>
-      <thead>
-  <tr>
-    <th onClick={(event) => requestSort('id', event)} onContextMenu={(event) => requestSort('id', event)}>
-      ID {getSortDirectionIndicator('id')}
-    </th>
-    <th onClick={(event) => requestSort('name', event)} onContextMenu={(event) => requestSort('name', event)}>
-      Name {getSortDirectionIndicator('name')}
-    </th>
-    <th onClick={(event) => requestSort('year', event)} onContextMenu={(event) => requestSort('year', event)}>
-      Year {getSortDirectionIndicator('year')}
-    </th>
-    <th onClick={(event) => requestSort('cgpa', event)} onContextMenu={(event) => requestSort('cgpa', event)}>
-      CGPA {getSortDirectionIndicator('cgpa')}
-    </th>
-    <th onClick={(event) => requestSort('skills', event)} onContextMenu={(event) => requestSort('skills', event)}>
-      Skills {getSortDirectionIndicator('skills')}
-    </th>
-    <th onClick={(event) => requestSort('email', event)} onContextMenu={(event) => requestSort('email', event)}>
-      Email {getSortDirectionIndicator('email')}
-    </th>
-    <th onClick={(event) => requestSort('placement', event)} onContextMenu={(event) => requestSort('placement', event)}>
-      Placement ID {getSortDirectionIndicator('placement')}
-    </th>
-  </tr>
-</thead>
-<tbody>
-{sortedStudents.map((student) => (
-  <tr key={student.id} onDoubleClick={() => editStudent(student.id)}>
-    <td>{student.id}</td>
-    <td>
-      {editingId === student.id ? (
-        <input 
-          value={tempEditValues.name} 
-          onChange={(e) => handleInputChange(e, 'name')} 
-          onKeyDown={(e) => handleKeyPress(e, student.id)}
-        />
-      ) : (
-        student.name
-      )}
-    </td>
-    <td>
-      {editingId === student.id ? (
-        <input 
-          value={tempEditValues.year} 
-          onChange={(e) => handleInputChange(e, 'year')} 
-          onKeyDown={(e) => handleKeyPress(e, student.id)}
-        />
-      ) : (
-        student.year
-      )}
-    </td>
-    <td>
-      {editingId === student.id ? (
-        <input 
-          value={tempEditValues.cgpa} 
-          onChange={(e) => handleInputChange(e, 'cgpa')} 
-          onKeyDown={(e) => handleKeyPress(e, student.id)}
-        />
-      ) : (
-        student.cgpa
-      )}
-    </td>
-    <td>{student.skills}</td>
-    <td>
-      {editingId === student.id ? (
-        <input 
-          value={tempEditValues.email} 
-          onChange={(e) => handleInputChange(e, 'email')} 
-          onKeyDown={(e) => handleKeyPress(e, student.id)}
-        />
-      ) : (
-        student.email
-      )}
-    </td>
-    <td>
-    <button onClick={() => fetchPlacementData(student.placement)}>
-  {Object.keys(AllPlacementData).includes(student.placement.toString()) 
-    ? AllPlacementData[student.placement]['company'] 
-    : student.placement}
-  </button>
-</td>
-  </tr>
-))}
-</tbody>
+        <thead>
+          <tr>
+            <th onClick={(event) => requestSort('id', event)} onContextMenu={(event) => requestSort('id', event)}>
+              ID {getSortDirectionIndicator('id')}
+            </th>
+            <th onClick={(event) => requestSort('name', event)} onContextMenu={(event) => requestSort('name', event)}>
+              Name {getSortDirectionIndicator('name')}
+            </th>
+            <th onClick={(event) => requestSort('year', event)} onContextMenu={(event) => requestSort('year', event)}>
+              Year {getSortDirectionIndicator('year')}
+            </th>
+            <th onClick={(event) => requestSort('cgpa', event)} onContextMenu={(event) => requestSort('cgpa', event)}>
+              CGPA {getSortDirectionIndicator('cgpa')}
+            </th>
+            <th onClick={(event) => requestSort('skills', event)} onContextMenu={(event) => requestSort('skills', event)}>
+              Skills {getSortDirectionIndicator('skills')}
+            </th>
+            <th onClick={(event) => requestSort('email', event)} onContextMenu={(event) => requestSort('email', event)}>
+              Email {getSortDirectionIndicator('email')}
+            </th>
+            <th onClick={(event) => requestSort('placement', event)} onContextMenu={(event) => requestSort('placement', event)}>
+              Placement {getSortDirectionIndicator('placement')}
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {sortedStudents.map((student) => (
+            <tr key={student.id} onDoubleClick={() => editStudent(student.id)}>
+              <td>{student.id}</td>
+              <td>
+                {editingId === student.id ? (
+                  <input
+                    value={tempEditValues.name}
+                    onChange={(e) => handleInputChange(e, 'name')}
+                    onKeyDown={(e) => handleKeyPress(e, student.id)}
+                  />
+                ) : (
+                  student.name
+                )}
+              </td>
+              <td>
+                {editingId === student.id ? (
+                  <input
+                    value={tempEditValues.year}
+                    onChange={(e) => handleInputChange(e, 'year')}
+                    onKeyDown={(e) => handleKeyPress(e, student.id)}
+                  />
+                ) : (
+                  student.year
+                )}
+              </td>
+              <td>
+                {editingId === student.id ? (
+                  <input
+                    value={tempEditValues.cgpa}
+                    onChange={(e) => handleInputChange(e, 'cgpa')}
+                    onKeyDown={(e) => handleKeyPress(e, student.id)}
+                  />
+                ) : (
+                  student.cgpa
+                )}
+              </td>
+              <td>
+                {editingId === student.id ? (
+                  <>
+                    {tempEditValues.skills.map((skill, index) => (
+                      <div key={index}>
+                        <span>
+                          <button onClick={() => removeSkill(student.id, skill)}
+                            style={{ padding: '0', width: '20px', height: '20px', fontSize: '0.8em', border: 'None' ,cursor: 'pointer' }}            >
+                            ❌
+                          </button>
+                          {skill.toString().trim()},
+                        </span>
+                      </div>
+                    ))}
+                    <input
+                      type="text"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          addSkill(student.id, e.target.value)
+                          handleKeyPress(e, student.id,e.target.value);
+                          e.target.value = '';
+                        }
+                      }}
+                      style={{ width: '100px' }}
+                    />
+                  </>
+                ) : (
+                  student.skills.join(',')
+                )}
+              </td>
+              <td>      {editingId === student.id ? (
+                <input
+                  value={tempEditValues.email}
+                  onChange={(e) => handleInputChange(e, 'email')}
+                  onKeyDown={(e) => handleKeyPress(e, student.id)}
+                />
+              ) : (
+                student.email
+              )}
+              </td>
+              <td>
+                {editingId === student.id ? (
+                  <input
+                    value={tempEditValues.placement}
+                    onChange={(e) => handleInputChange(e, 'placement')}
+                    onKeyDown={(e) => handleKeyPress(e, student.id)}
+                  />
+                ) : (
+                  <button onClick={() => fetchPlacementData(student.placement)}>
+                    {Object.keys(AllPlacementData).includes(student.placement.toString())
+                      ? AllPlacementData[student.placement]['company']
+                      : student.placement}
+                  </button>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
       </table>
       {!hidden && (
         <div className="placement-details">
