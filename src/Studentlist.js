@@ -10,6 +10,7 @@ function StudentList() {
   const [editingId, setEditingId] = useState(null);
   const [tempEditValues, setTempEditValues] = useState({});
   const [AllPlacementData, setAllPlacementData] = useState({});
+  const [sortConfig, setSortConfig] = useState({});
 
   useEffect(() => {
     axios.get('http://localhost/getdata.php')
@@ -22,6 +23,7 @@ function StudentList() {
   }, []);
 
   const editStudent = (id) => {
+    if (id === editingId) {setEditingId(null); return;}
     setEditingId(id);
     const student = students.find(student => student.id === id);
     setTempEditValues(student); // Initialize temporary edit values with the student's current data
@@ -53,6 +55,9 @@ function StudentList() {
           // Optionally handle error, e.g., show an error message
         });
     }
+    else if (e.key === 'Escape') {
+      setEditingId(null); // Exit editing mode
+    }
   };
 
   useEffect(() => {
@@ -83,24 +88,88 @@ function StudentList() {
         console.error('There was an error fetching the placement data:', error);
       });
   };
-
+  const requestSort = (key, event) => {
+    event.preventDefault(); // Prevent the browser's context menu from showing up
+    if (event.type === 'click') {
+      // Left click: sort as before
+      setSortConfig(prevConfig => {
+        let direction = 'ascending';
+        if (prevConfig[key] === 'ascending') {
+          direction = 'descending';
+        } else if (prevConfig[key] === 'descending') {
+          direction = 'none';
+        }
+        return { ...prevConfig, [key]: direction };
+      });
+    } else if (event.type === 'contextmenu') {
+      // Right click: remove sorting
+      setSortConfig(prevConfig => {
+        return { ...prevConfig, [key]: 'none' };
+      });
+    }
+  };  const getSortDirectionIndicator = key => {
+    return sortConfig[key] === 'ascending' ? '↑' : sortConfig[key] === 'descending' ? '↓' : '';
+  };
+  let sortedStudents = [...students];
+  Object.keys(sortConfig).forEach(key => {
+    if (sortConfig[key] !== 'none') {
+      sortedStudents.sort((a, b) => {
+        if (key === 'skills') {
+          // Special case for 'skills'
+          const aSkills = a[key].split(',');
+          const bSkills = b[key].split(',');
+          if (aSkills.length < bSkills.length) {
+            return sortConfig[key] === 'ascending' ? -1 : 1;
+          }
+          if (aSkills.length > bSkills.length) {
+            return sortConfig[key] === 'ascending' ? 1 : -1;
+          }
+        } else {
+          // Default case
+          if (a[key] > b[key]) {
+            return sortConfig[key] === 'ascending' ? -1 : 1;
+          }
+          if (a[key] < b[key]) {
+            return sortConfig[key] === 'ascending' ? 1 : -1;
+          }
+        }
+        return 0;
+      });
+    }
+  });    
   return (
     <div className="student-container">
       <h2>Placement Management System</h2>
       <table>
-        <thead>
-          <tr>
-            <th>Name</th>
-            <th>Year</th>
-            <th>CGPA</th>
-            <th>Skills</th>
-            <th>Email</th>
-            <th>Placement ID</th>
-          </tr>
-        </thead>
-        <tbody>
-        {students.map((student) => (
+      <thead>
+  <tr>
+    <th onClick={(event) => requestSort('id', event)} onContextMenu={(event) => requestSort('id', event)}>
+      ID {getSortDirectionIndicator('id')}
+    </th>
+    <th onClick={(event) => requestSort('name', event)} onContextMenu={(event) => requestSort('name', event)}>
+      Name {getSortDirectionIndicator('name')}
+    </th>
+    <th onClick={(event) => requestSort('year', event)} onContextMenu={(event) => requestSort('year', event)}>
+      Year {getSortDirectionIndicator('year')}
+    </th>
+    <th onClick={(event) => requestSort('cgpa', event)} onContextMenu={(event) => requestSort('cgpa', event)}>
+      CGPA {getSortDirectionIndicator('cgpa')}
+    </th>
+    <th onClick={(event) => requestSort('skills', event)} onContextMenu={(event) => requestSort('skills', event)}>
+      Skills {getSortDirectionIndicator('skills')}
+    </th>
+    <th onClick={(event) => requestSort('email', event)} onContextMenu={(event) => requestSort('email', event)}>
+      Email {getSortDirectionIndicator('email')}
+    </th>
+    <th onClick={(event) => requestSort('placement', event)} onContextMenu={(event) => requestSort('placement', event)}>
+      Placement ID {getSortDirectionIndicator('placement')}
+    </th>
+  </tr>
+</thead>
+<tbody>
+{sortedStudents.map((student) => (
   <tr key={student.id} onDoubleClick={() => editStudent(student.id)}>
+    <td>{student.id}</td>
     <td>
       {editingId === student.id ? (
         <input 
