@@ -91,7 +91,7 @@ useEffect(() => {
       {isOpen && (
         <div className="filter-content">
           {Object.keys(filters).map(key => (
-            <div key={key} className='labelInput'>
+            <div key={key} className='labelInput' style={{marginRight:"0.1vw"}}>
             <label style={{marginRight:"0.5vw"}}>
               {key.toUpperCase()}:
             </label>
