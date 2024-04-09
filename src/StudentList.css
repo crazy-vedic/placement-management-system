@@ -1,14 +1,10 @@
 .student-container {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    max-width: 80%;
+    max-width: 90%;
     margin: 20px auto;
     overflow-x: auto;
   }
   
-  h2 {
-    text-align: center;
-    color: #0275d8; /* Bootstrap primary color */
-  }
   
   table {
     width: 100%;

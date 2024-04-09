@@ -1,17 +1,20 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import axios from 'axios';
 import './StudentList.css';
+import { AppContext } from './Context';
 
-// Assuming your initial students state is fetched from an API now
+//ALL OF MY EDITING OF THE DB LEADS TO AN EDIT ON THE STUDENTS IF 200, THEN THAT IS DEFINING FILTERED
+//FILTERED IS DEFINING SORTING, THAT THEN DEFINES DISPLAYED STUDENTS
+
 function StudentList() {
-  const [students, setStudents] = useState([]);
+  const {students, setStudents,filtered, setFiltered} = useContext(AppContext);
   const [placementData, setPlacementData] = useState({ id: 0, company: '', date: '', details: '' });
   const [hidden, setHidden] = useState(true);
   const [editingId, setEditingId] = useState(null);
   const [tempEditValues, setTempEditValues] = useState({});
   const [AllPlacementData, setAllPlacementData] = useState({});
   const [sortConfig, setSortConfig] = useState({});
-  const [sortedStudents, setSortedStudents] = useState([...students]);
+  const [displayedStudents, setDisplayedStudents] = useState([...students]);
 
 
   useEffect(() => {
@@ -19,15 +22,16 @@ function StudentList() {
       .then(response => {
         const studentsWithSkillsArray = response.data.map(student => ({
           ...student,
-          skills: student.skills.split(',')
+          skills: student.skills ? student.skills.split(',') : []
         }));
         setStudents(studentsWithSkillsArray);
+        setFiltered(studentsWithSkillsArray);
         console.log(studentsWithSkillsArray)
       })
       .catch(error => {
         console.error('There was an error fetching the students data:', error);
       });
-  }, []);
+  }, [setStudents,setFiltered]);
 
 
   const editStudent = (id) => {
@@ -43,6 +47,7 @@ function StudentList() {
 
   const handleKeyPress = (e, studentId,extra=null) => {
     if (e.key === 'Enter') {
+      e.stopPropagation()
       e.preventDefault(); // Prevent the default action to avoid any form submission, if applicable
       let tempData = { ...tempEditValues };delete tempData.skills; // Remove the 'skills' property from the data to be sent
       axios.post('http://localhost/placementManagement/updateStudent.php', { ...tempData, id: studentId })
@@ -72,18 +77,23 @@ function StudentList() {
       return;
     }
     setHidden(false);
-
+  
     axios.get(`http://localhost/placementManagement/placementdata.php`, { params: { id: placementId } }) // Update the URL to your actual endpoint
       .then(response => {
-        setPlacementData(response.data);
-        setAllPlacementData(prevData => ({ ...prevData, [placementId]: response.data }))
-        console.log(AllPlacementData)
+        if (response.data.error) {
+          setHidden(true);
+          setAllPlacementData(prevData => ({ ...prevData, [placementId]: {"company":"Error"} }))
+          console.error('There was an error fetching the placement data:', response.data.error);
+        } else {
+          setPlacementData(response.data);
+          setAllPlacementData(prevData => ({ ...prevData, [placementId]: response.data }))
+          console.log(AllPlacementData)
+        }
       })
       .catch(error => {
         console.error('There was an error fetching the placement data:', error);
       });
-  };
-  const requestSort = (key, event) => {
+  };  const requestSort = (key, event) => {
     event.preventDefault(); // Prevent the browser's context menu from showing up
     if (event.type === 'click') {
       // Left click: sort as before
@@ -106,7 +116,7 @@ function StudentList() {
     return sortConfig[key] === 'ascending' ? '↑' : sortConfig[key] === 'descending' ? '↓' : '';
   };
   useEffect(() => {
-    let sorted = [...students];
+    let sorted = [...filtered];
     Object.keys(sortConfig).forEach(key => {
       if (sortConfig[key] !== 'none') {
         sorted.sort((a, b) => {
@@ -133,8 +143,8 @@ function StudentList() {
         });
       }
     });
-    setSortedStudents(sorted);
-  }, [students, sortConfig]);
+    setDisplayedStudents(sorted);
+  }, [filtered,sortConfig,students]);
   const removeSkill = (studentId, skill) => {
     axios.post('http://localhost/placementManagement/removeSkill.php', {
       studentId: studentId,
@@ -185,7 +195,6 @@ function StudentList() {
   };
    return (
     <div className="student-container">
-      <h2>Placement Management System</h2>
       <table>
         <thead>
           <tr>
@@ -213,7 +222,7 @@ function StudentList() {
           </tr>
         </thead>
         <tbody>
-          {sortedStudents.map((student) => (
+          {displayedStudents.map((student) => (
             <tr key={student.id} onDoubleClick={() => editStudent(student.id)}>
               <td>{student.id}</td>
               <td>
@@ -268,6 +277,7 @@ function StudentList() {
                       type="text"
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') {
+                          e.stopPropagation();
                           addSkill(student.id, e.target.value)
                           handleKeyPress(e, student.id,e.target.value);
                           e.target.value = '';
